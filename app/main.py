@@ -17,6 +17,12 @@ app = FastAPI(title="twilio-jp-050-voice-bot")
 
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
+DEFAULT_BOT_NAME = "Grok Phone Bot"
+
+
+def bot_name() -> str:
+    cleaned = " ".join(os.environ.get("BOT_NAME", "").split())
+    return cleaned or DEFAULT_BOT_NAME
 
 
 def validation_enabled() -> bool:
@@ -71,14 +77,25 @@ async def guard(request: Request) -> Response | None:
 
 
 def inbound_twiml() -> str:
+    """Name the bot first, then ask what the caller needs.
+
+    The first ``<Say>`` is the self-introduction. The next ``<Say>`` is the
+    request prompt. Do not open with a generic greeting that omits the name.
+    """
+    name = bot_name()
     response = VoiceResponse()
     response.say(
-        "こんにちは。こちらは Twilio の日本ゼロゴーゼロ番号の公開デモです。",
+        f"こんにちは、{name}です。",
         language="ja-JP",
         voice="Polly.Mizuki",
     )
     response.say(
-        "This is a public Twilio Japan 050 voice demo. Goodbye.",
+        "ご用件をどうぞ。どのようにお手伝いできますか。",
+        language="ja-JP",
+        voice="Polly.Mizuki",
+    )
+    response.say(
+        f"Hello, this is {name}. How can I help you?",
         language="en-US",
         voice="Polly.Joanna",
     )

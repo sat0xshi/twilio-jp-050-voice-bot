@@ -10,6 +10,7 @@ _ENV_KEYS = (
     "STATUS_LOG_PATH",
     "HOST",
     "PORT",
+    "BOT_NAME",
 )
 
 

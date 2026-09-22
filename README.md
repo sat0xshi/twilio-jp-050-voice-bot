@@ -1,6 +1,8 @@
 # Twilio Japan 050 voice demo
 
-Public demo: buy a Japan **050 National** number on Twilio, answer one inbound call with a spoken greeting, place one outbound call, and append call-status callbacks to a JSONL file with phone numbers masked.
+Public demo: buy a Japan **050 National** number on Twilio, answer one inbound call, place one outbound call, and append call-status callbacks to a JSONL file with phone numbers masked.
+
+On an inbound call the bot must introduce itself by name before it asks how it can help. The name is `BOT_NAME` (default `Grok Phone Bot`).
 
 Anyone who clones this repo can follow the steps below. The app is a small FastAPI server plus one outbound script. It does not record calls, and it does not set up SIP trunks or messaging.
 
@@ -55,6 +57,7 @@ Edit `.env`. `.env.example` holds placeholders only. Real values stay in `.env`,
 | `OUTBOUND_TO` | The phone that should ring for the outbound test, E.164. |
 | `PUBLIC_BASE_URL` | The tunnel origin from section 4. `https://…`, no path, no trailing slash. |
 | `TWILIO_VALIDATE_REQUESTS` | `auto` (default). Signatures are checked once `TWILIO_AUTH_TOKEN` is set. |
+| `BOT_NAME` | Display name spoken on inbound calls. Default `Grok Phone Bot` when unset or blank. |
 | `STATUS_LOG_PATH` | Default `logs/call_status.jsonl`. |
 
 Restart the server after you change `.env`. The process reads it at startup.
@@ -121,21 +124,32 @@ Save. The outbound script sets its own status callback; you do not need a second
 
 ## 6. Inbound test
 
+Required inbound behavior: when the call is answered, the bot speaks its own name first, then asks how it can help. It must not open with a generic greeting that leaves the name out.
+
+`POST /voice` returns TwiML in this order:
+
+1. Japanese self-introduction (`Polly.Mizuki`, `ja-JP`): `こんにちは、{BOT_NAME}です。`
+2. Japanese request prompt: `ご用件をどうぞ。どのようにお手伝いできますか。`
+3. English restatement that repeats the name and the offer to help.
+4. Hang up.
+
+`BOT_NAME` comes from the environment. If it is missing or blank, the spoken name is `Grok Phone Bot`. Change `BOT_NAME` in `.env` and restart the server to use another name. A placeholder name is enough for this demo.
+
 Local XML check (validation off, or no auth token yet):
 
 ```bash
 curl -sS -X POST http://127.0.0.1:8000/voice
 ```
 
-The body is TwiML. It says a Japanese greeting (`Polly.Mizuki`, `ja-JP`), then an English line (`Polly.Joanna`, `en-US`), then hangs up.
+The first `<Say>` text must contain `BOT_NAME`. The next `<Say>` asks for the caller's request.
 
 Phone check, after the tunnel and the console webhook are in place:
 
 1. Call your `+8150…` number.
-2. You should hear the Japanese greeting, then the English line.
+2. You should hear `こんにちは、` plus the bot name, then the request prompt, then the English line.
 3. Twilio hangs up.
 
-A trial account inserts its own spoken notice before that greeting.
+A trial account inserts its own spoken notice before your bot speaks.
 
 ## 7. Outbound test
 
@@ -201,14 +215,14 @@ scripts/place_call.sh
 
 ## 日本語（概要）
 
-公開デモです。Twilio で日本の 050（National、`+8150`）番号を買い、着信で挨拶を再生し、発信を 1 件行い、通話状態を番号マスク済みの JSONL に残します。
+公開デモです。Twilio で日本の 050（National、`+8150`）番号を買い、着信では最初にボット名を名乗ってから用件を尋ね、発信を 1 件行い、通話状態を番号マスク済みの JSONL に残します。
 
 1. Console の **Phone Numbers → Regulatory Compliance** で、国 Japan・番号種別 **National** の規制バンドルを申請する。承認後に **Buy a number** から Voice 付きの National 番号（`+8150…`）を買う。必要書類は [Japan regulatory guidelines](https://www.twilio.com/en-us/guidelines/jp/regulatory) が正です。
 2. `.env.example` を `.env` にコピーし、SID・Auth Token・050 番号・発信先・公開 URL を入れる。`.env` はコミットしない。
 3. `python3 -m venv .venv && source .venv/bin/activate && python -m pip install -r requirements.txt` のあと `./scripts/run_server.sh` で起動する。
 4. `ngrok http 8000` または `cloudflared tunnel --url http://127.0.0.1:8000` で HTTPS の入口を作る。`PUBLIC_BASE_URL` にそのオリジン（パスなし）を入れ、サーバーを再起動する。
 5. 番号の Voice で、着信 Webhook を `POST https://<host>/voice`、通話状態を `POST https://<host>/status` にする。
-6. 050 番号へ電話し、日本語の挨拶のあとに英語が流れることを確認する。ローカルの XML 確認は `curl -sS -X POST http://127.0.0.1:8000/voice`。
+6. 着信の必須動作: 最初の発話は「こんにちは、{BOT_NAME}です。」（未設定時は `Grok Phone Bot`）。その次に用件を尋ねる。名前のない汎用挨拶から始めない。050 番号へ電話して確認する。ローカルの XML 確認は `curl -sS -X POST http://127.0.0.1:8000/voice`。
 7. `./scripts/place_call.sh` で `OUTBOUND_TO` へ 1 件発信する。トライアルアカウントは確認済み番号にしか発信できない。
 8. `logs/call_status.jsonl` を見て、番号が末尾 4 桁以外マスクされていることを確認する。
 
